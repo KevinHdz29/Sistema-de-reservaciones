@@ -31,11 +31,11 @@ class Reserva:
         self.nombre_evento = nombre_evento
         self.turno = turno
 
-# Funciones auxiliares
+
 def obtener_clientes():
     titulo("Clientes registrados")
     print(f"{'Clave':<8} {'Apellidos':<20} {'Nombres':<15}")
-    sep(70)                                                 # K = Key 0   V = Value 1
+    sep(70)                                                 
     for clave, cliente in sorted(clientes.items(), key=lambda kv: (kv[1].apellido, kv[1].nombre)):
         print(f"{clave:<8} {cliente.apellido:<20} {cliente.nombre:<15}")
     sep(70)
@@ -115,7 +115,7 @@ def convertir(entrada):
         return
     return int(entrada)
 
-# Función para dar de alta clientes y salas
+
 def altas():
     nombres_iniciales = [["Marcos Israel", "Suárez Luna"],["Kevin Eduardo", "Hernández López"], ["Brando Javier", "Solís Salazar"], ["Victor Manuel", "López López"], ["Elian Jesús", "García Sánchez"]]
     for nombre, apellido in nombres_iniciales:
@@ -128,7 +128,7 @@ def altas():
         salas[nSala.id_sala] = nSala
     print("Salas iniciales cargadas correctamente.\n")
 
-# Función opción 1
+
 def agregar_reservacion():
     if not clientes:
         print("Aún no hay clientes agregados para hacer una reservación.")
@@ -212,7 +212,7 @@ def agregar_reservacion():
                         agregar_reservacion_turno(cliente_elegido, sala, fecha_procesada, turno_elegido)
                         return
                             
-# Función opción 2
+
 def editar_nombre_reservacion():
     if not reservas:
         print("No existen reservaciones aún para editar.")
@@ -272,7 +272,7 @@ def editar_nombre_reservacion():
                     print("El nombre del evento ha sido cambiado exitosamente.")
                     return
                 
-# Función opción 3
+
 def consultar_reservaciones():
     if not reservas:
         print("Aún no hay reservaciones para ninguna fecha")
@@ -305,7 +305,7 @@ def consultar_reservaciones():
         sep(90)
         return
 
-# Función opción 4
+
 def agregar_cliente():
     while True:
         nombres = input("\nIngrese los nombres de el cliente (o C para cancelar): ").title().strip()
@@ -330,7 +330,7 @@ def agregar_cliente():
             print("#"*70)
             return
         
-# Función opción 5
+
 def agregar_sala():
     while True:
         nombre_sala = input("\nIngrese el nombre de la Sala (o C para cancelar): ").title().strip()
@@ -360,7 +360,7 @@ def agregar_sala():
             print("#"*70)
             return
         
-# Función menú
+
 def menu():
     try: 
         while True:
@@ -408,6 +408,6 @@ def alta_reservacion():
         
 
 if __name__ == "__main__":
-    #altas()
-    #alta_reservacion()
+    altas()
+    alta_reservacion()
     menu()

@@ -1,4 +1,9 @@
 import datetime as dt
+import sys
+import json
+import csv
+import openpyxl
+from openpyxl.styles import Font,Alignment,Border,Side
 
 clientes = {}
 salas = {}
@@ -40,24 +45,21 @@ def obtener_clientes():
         print(f"{clave:<8} {cliente.apellido:<20} {cliente.nombre:<15}")
     sep(70)
 
-def obtener_salas(fecha_procesada):
-    titulo2(f"Salas disponibles para {fecha_procesada}")
+def obtener_salas(fecha):
+    titulo2(f"Salas disponibles para {formato(fecha)}")
     print(f"{'Clave':<8} {'Sala':<20} {'Cupo':<15} {'Turno disponible':<20}")
     sep(90)
     for clave, sala in salas.items():
-        libres = filtro(sala, fecha_procesada)
+        libres = filtro(sala, fecha)
         if not libres:
             print(f"{clave:<8} {sala.nombre:<20} {'':<15} {'SALA OCUPADA':<20}")
             continue
-        print(f"{clave:<8} {sala.nombre:<20} {sala.cupo:<15} {" | ".join(libres):<20}")
+        print(f"{clave:<8} {sala.nombre:<20} {sala.cupo:<15} {' | '.join(libres):<20}")
     sep(90)
 
-def filtro(sala, fecha_procesada):
-    ocupados = obtener_turnos_ocupados(sala, fecha_procesada)
-    libres = []
-    for turno in TURNOS:
-        if turno not in ocupados:
-            libres.append(turno)
+def filtro(sala, fecha):
+    ocupados = obtener_turnos_ocupados(sala, fecha)
+    libres = [turno for turno in TURNOS if turno not in ocupados]
     return libres
 
 def obtener_turnos_ocupados(sala, fecha):
@@ -67,32 +69,30 @@ def obtener_turnos_ocupados(sala, fecha):
             turnos_ocupados.append(reserva.turno)
     return turnos_ocupados
 
-def mostrar_reserva(nuevo_evento, cliente_elegido, sala, fecha_procesada, nombre_evento):
+def agregar_reservacion_turno(cliente, sala, fecha, turno_elegido):
+    nombre_evento = entrada("Ingrese el nombre del evento")
+    if nombre_evento is None:
+        return
+    nuevo_evento = Reserva(cliente, sala, fecha, turno_elegido, nombre_evento)
+    reservas[nuevo_evento.folio] = nuevo_evento
+    mostrar_reserva(nuevo_evento, cliente, sala, fecha, nombre_evento)
+    return
+    
+def mostrar_reserva(nuevo_evento, cliente, sala, fecha, nombre_evento):
     titulo("Reservación registrada exitosamente")
     print(f"Folio:   {nuevo_evento.folio}")
-    print(f"Cliente: {cliente_elegido.getNombres()}")
+    print(f"Cliente: {cliente.getNombres()}")
     print(f"Sala:    {sala.nombre} | Cupo: {sala.cupo}")
-    print(f"Fecha:   {fecha_procesada}")
+    print(f"Fecha:   {formato(fecha)}")
     print(f"Evento:  {nombre_evento}")
     print(f"Turno:   {nuevo_evento.turno}")
 
-def agregar_reservacion_turno(cliente_elegido, sala, fecha_procesada, turno_elegido):
-    while True:
-        nombre_evento = input("Ingrese el nombre del evento: ").strip()
-        if not nombre_evento:
-            print("El evento debe tener un nombre si o si")
-            continue
-        nuevo_evento = Reserva(cliente_elegido, sala, fecha_procesada, turno_elegido, nombre_evento)
-        reservas[nuevo_evento.folio] = nuevo_evento
-        mostrar_reserva(nuevo_evento, cliente_elegido, sala, fecha_procesada, nombre_evento)
-        return
-
-def mostrar_reservacion_fechas(fecha_inicio_procesada,fecha_fin_procesada,filtro_fechas):
-    titulo2(f"Reservaciones para {fecha_inicio_procesada} - {fecha_fin_procesada}")
+def mostrar_reservacion_fechas(fecha_inicio, fecha_fin, filtro_fechas):
+    titulo2(f"Reservaciones para {formato(fecha_inicio)} - {formato(fecha_fin)}")
     print(f"{'Folio':<8}{'Cliente':<19}{'Fecha':<15}{'Nombre del evento':<20}{'Sala':<20}{'Turno':<10}")
     sep(90)
     for folio,reserva in filtro_fechas.items():
-        print(f"{folio:<8}{reserva.objeto_cliente.nombre:<19}{str(reserva.fecha):<15}{reserva.nombre_evento:<20}{reserva.objeto_sala.nombre:<20}{reserva.turno:<10}")
+        print(f"{folio:<8}{reserva.objeto_cliente.getNombres():<19}{formato(reserva.fecha):<15}{reserva.nombre_evento:<20}{reserva.objeto_sala.nombre:<20}{reserva.turno:<10}")
     sep(90)
 
 def titulo(nombre):
@@ -110,261 +110,261 @@ def titulo2(nombre):
 def sep(cantidad):
     print("-"*cantidad)
 
-def convertir(entrada):
-    if not entrada.isdigit():
-        return
-    return int(entrada)
+def sep2(cantidad):
+    print("#"*cantidad)
 
+def salto():
+    print("\n")
 
-def altas():
-    nombres_iniciales = [["Marcos Israel", "Suárez Luna"],["Kevin Eduardo", "Hernández López"], ["Brando Javier", "Solís Salazar"], ["Victor Manuel", "López López"], ["Elian Jesús", "García Sánchez"]]
-    for nombre, apellido in nombres_iniciales:
-        nCliente = Cliente(nombre, apellido)
-        clientes[nCliente.id_cliente] = nCliente
-    print("\nClientes iniciales cargados correctamente.")
-    salas_iniciales = [["Oficina A", 100], ["Oficina B", 50], ["Oficina C",150], ["Oficina D",20], ["Oficina E", 200]]
-    for sala, cupo in salas_iniciales:
-        nSala = Sala(sala,cupo)
-        salas[nSala.id_sala] = nSala
-    print("Salas iniciales cargadas correctamente.\n")
+def formato(fecha):
+    return dt.datetime.strftime(fecha,"%d-%m-%Y")
+
+def entrada(texto, c="C", tipo=str):
+    while True:
+        valor = input(f"{texto} o {c} para cancelar: ").strip().title()
+        if valor == c:
+            print("Operación cancelada... Volviendo al menú.\n")
+            return None
+        if not valor:
+            print("No puede quedar vacío.\n")
+            continue
+        if tipo is str:
+            if valor.isdigit():
+                print("No se permite escribir solo números.\n")
+                continue
+            return valor
+        elif tipo is int:
+            if not valor.isdigit():
+                print("Debe ingresar un número entero.\n")
+                valor = -1
+            return int(valor)
+        elif tipo is dt.date:
+            try:
+                return dt.datetime.strptime(valor, "%d-%m-%Y").date()
+            except ValueError:
+                print("La fecha proporcionada no es válida, favor de usar el formato correcto (DD-MM-YYYY)\n")
+                continue
 
 
 def agregar_reservacion():
-    if not clientes:
-        print("Aún no hay clientes agregados para hacer una reservación.")
+    if not clientes and not salas:
+        print("Aún no hay clientes ni salas agregados para hacer una reservación.")
         return
-    
-    elif not salas:
-        print("Aún no hay salas agregadas para hacer una reservación.")
+    if not clientes:
+        print("Aún no hay clientes para hacer una reservación")
+        return
+    if not salas:
+        print("Aún no hay salas para hacer una reservación")
         return
     
     while True:
         obtener_clientes()
-        clave = input("Ingrese la clave del cliente para la reservación (o C para cancelar): ").upper().strip()
-        if clave == "C":
-            print("Operación cancelada, volviendo al menú...")
+        clave = entrada("Ingrese la clave del cliente para la reservación", tipo=int)
+        if clave is None:
             return
-        
-        clave = convertir(clave)
-        
+
         if clave not in clientes:
             print("\nNo existe ese cliente, favor de elegir el correcto")
             continue
 
         cliente_elegido = clientes[clave]
-        while True:
-            fecha_reservacion = input("Ingrese la fecha de reservación (DD-MM-YYYY) (debe ser 2 días posteriores a hoy): ")
+        break
+    while True:
+        fecha_reservacion = entrada("Ingrese la fecha de reservación (DD-MM-YYYY) (debe ser al menos 2 días posterior a hoy)", tipo=dt.date)
+        if fecha_reservacion is None:
+            return
 
-            try:
-                fecha_procesada = dt.datetime.strptime(fecha_reservacion, "%d-%m-%Y").date()
-            except ValueError:
-                print("La fecha proporcionada no es válida, favor de usar el formato correcto (DD-MM-YYYY)\n")
-                continue
+        if fecha_reservacion < FECHA_MINIMA:
+            print("Esa fecha no cumple con los requisitos (2 días posteriores a hoy) \n ")
+            continue
+        break
+    while True:
+        obtener_salas(fecha_reservacion)
+        sala_elegida = entrada("Ingrese la clave de la sala que desea usar", tipo=int)
+        if sala_elegida is None:
+            return
+        if sala_elegida not in salas:
+            print("\nSala no encontrada, favor de elegir la correcta.")
+            continue
 
-            if not fecha_procesada > FECHA_MINIMA:
-                print("Esa fecha no cumple con los requisitos (2 días posteriores a hoy)\n")
-                continue
+        sala = salas[sala_elegida]
+        libres = filtro(sala, fecha_reservacion)
+        if not libres:
+            print("Esa sala no tiene turnos libres ese día. Elige otra sala.")
+            continue
+        break 
+    while True: 
+        turno_elegido = entrada("Ingrese el turno para el evento (M,V,N)")
+        if turno_elegido is None:
+            return
+        if turno_elegido not in ("M", "V", "N", "Matutino", "Vespertino", "Nocturno"):
+            print("No existe ese turno, favor de elegir el correcto (M,V,N)\n")
+            continue
 
-            while True:
-                obtener_salas(fecha_procesada)
-                sala_elegida = input("Ingrese la clave de la sala que desea usar (o C para cancelar): ").upper()
+        if turno_elegido == "M":
+            turno_elegido = "Matutino"
+        if turno_elegido == "V":
+            turno_elegido = "Vespertino"
+        if turno_elegido == "N":
+            turno_elegido = "Nocturno"
 
-                if sala_elegida == "C":
-                    print("Operación cancelada, volviendo al menú...")
-                    return
-                sala_elegida = convertir(sala_elegida)
+        ocupados = obtener_turnos_ocupados(sala, fecha_reservacion)
+        if turno_elegido in ocupados:
+            print(f"El turno {turno_elegido} está ocupado en la sala {sala.nombre} con fecha: {formato(fecha_reservacion)}")
+            continue
 
-                if not sala_elegida in salas:
-                    print("Sala no encontrada, favor de elegir la correcta.")
-                    continue
+        agregar_reservacion_turno(cliente_elegido, sala, fecha_reservacion, turno_elegido)
+        return        
 
-                sala = salas[sala_elegida]
-                libres = filtro(sala, fecha_procesada)
-                if not libres:
-                    print("Esa sala no tiene turnos libres ese día. Elige otra sala.\n")
-                    continue
-
-                while True: 
-                    turno_elegido = input("Ingrese el turno para el evento (M,V,N): ").upper()
-                    if turno_elegido not in ("MVN"):
-                        print("No existe ese turno, favor de elegir el correcto (M,V,N)\n")
-                        continue
-
-                    if turno_elegido == "M":
-                        turno_elegido = "Matutino"
-                    elif turno_elegido == "V":
-                        turno_elegido = "Vespertino"
-                    elif turno_elegido == "N":
-                        turno_elegido = "Nocturno"
-
-                    ocupados = obtener_turnos_ocupados(sala, fecha_procesada)
-                    if turno_elegido in ocupados:
-                        print(f"El turno {turno_elegido} esta ocupado en la sala {sala.nombre} con fecha: {fecha_procesada}")
-                        continue
-
-                    if turno_elegido == "Matutino":
-                        agregar_reservacion_turno(cliente_elegido, sala, fecha_procesada, turno_elegido)
-                        return
-                    elif turno_elegido == "Vespertino":
-                        agregar_reservacion_turno(cliente_elegido, sala, fecha_procesada, turno_elegido)
-                        return
-                    elif turno_elegido == "Nocturno":
-                        agregar_reservacion_turno(cliente_elegido, sala, fecha_procesada, turno_elegido)
-                        return
-                            
 
 def editar_nombre_reservacion():
     if not reservas:
         print("No existen reservaciones aún para editar.")
         return
-    
-    while True: 
-        fecha_inicio = input("Ingrese la fecha de inicio para la busqueda (DD-MM-YYYY) (o C para cancelar): ")
-        if fecha_inicio.upper() == "C":
-            print("Operación cancelada, volviendo al menú...")
+    while True:
+        fecha_inicio = entrada("Ingrese la fecha de inicio para la búsqueda (DD-MM-YYYY)", tipo=dt.date)
+        if fecha_inicio is None:
             return
-        
-        fecha_fin = input("Ingrese la fecha fin de la busqueda (DD-MM-YYYY) (o C para Cancelar): ")
-        if fecha_fin.upper() == "C":
-            print("Operación cancelada, volviendo al menú...")
+        fecha_fin = entrada("Ingrese la fecha fin de la búsqueda (DD-MM-YYYY)", tipo=dt.date)
+        if fecha_fin is None:
             return
-        
-        try:
-            fecha_inicio_procesada = dt.datetime.strptime(fecha_inicio, "%d-%m-%Y").date()
-            fecha_fin_procesada = dt.datetime.strptime(fecha_fin, "%d-%m-%Y").date()
-        except ValueError:
-            print("Una de las fechas o las dos no cumple con los requisitos (DD-MM-YYYY)")
+        if fecha_inicio > fecha_fin:
+            print("La fecha inicial no puede ser mayor a la fecha final.")
             continue
-
-        if fecha_inicio_procesada > fecha_fin_procesada:
-            print("La fecha Inicial no puede ser mayor a la fecha Final.")
+        break
+    filtro_fechas = {folio:reserva for folio,reserva in reservas.items() if fecha_inicio <= reserva.fecha and fecha_fin >= reserva.fecha}
+    if not filtro_fechas:
+        print("\nNo hay reservaciones en ese rango. Volviendo al menú...")
+        return
+    while True:
+        mostrar_reservacion_fechas(fecha_inicio,fecha_fin,filtro_fechas)
+        editar = entrada("Ingrese el folio del evento para editar su nombre", tipo=int)
+        if editar is None:
+            return
+        if editar not in filtro_fechas:
+            print("No existe ese folio, favor de elegir el correcto")
             continue
+        reserva_editar = reservas[editar]
+        break
+    while True:
+        editar_nombre = entrada("Ingrese el nuevo nombre")
+        if editar_nombre is None:
+            return
+        reserva_editar.nombre_evento = editar_nombre
+        print("El nombre del evento ha sido cambiado exitosamente.")
+        return
 
-        filtro_fechas = {}
-        for folio, reserva in reservas.items():
-            if fecha_inicio_procesada <= reserva.fecha and reserva.fecha <= fecha_fin_procesada:
-                filtro_fechas[folio] = reserva
-
-        if not filtro_fechas:
-            print("No hay reservaciones en ese rango.")
-            continue
-
-        while True:
-            mostrar_reservacion_fechas(fecha_inicio_procesada,fecha_fin_procesada,filtro_fechas)
-            editar_clave = input("Ingrese el folio del evento para editar su nombre: (o C para cancelar): ")
-            if editar_clave.upper() == "C":
-                print("Operación cancelada, volviendo al menú...")
-                return
-            
-            editar_clave = convertir(editar_clave)
-
-            if editar_clave not in filtro_fechas:
-                print("\nNo existe ese folio, favor de elegir el correcto.")
-                continue
-
-            editar = reservas[editar_clave]
-            while True:
-                editar_nombre = input("Ingrese el nuevo nombre: ").strip()
-                if not editar_nombre:
-                    print("El nombre no puede quedar vacío.")
-                else:
-                    editar.nombre_evento = editar_nombre
-                    print("El nombre del evento ha sido cambiado exitosamente.")
-                    return
-                
 
 def consultar_reservaciones():
     if not reservas:
         print("Aún no hay reservaciones para ninguna fecha")
         return
     while True:
-        seleccion_fecha = input("\nIngrese la fecha para ver las reservaciones (DD-MM-YYYY) (o C para cancelar): ")
-        if seleccion_fecha.upper() == "C":
-            print("Operación cancelada, volviendo al menú...")
+        seleccion_fecha = entrada("Ingrese la fecha para ver las reservaciones (DD-MM-YYYY)", tipo=dt.date)
+        if seleccion_fecha is None:
             return
-        try:
-            seleccion_fecha_procesada = dt.datetime.strptime(seleccion_fecha, "%d-%m-%Y").date()
-        except ValueError:
-            print("La fecha proporcionada no es válida, favor de usar el formato correcto (DD-MM-YYYY)")
-            continue
-
-        filtro_fechas = {}
-        for folio, reserva in reservas.items():
-            if reserva.fecha == seleccion_fecha_procesada:
-                filtro_fechas[folio] = reserva
-
+        filtro_fechas = [reserva for reserva in reservas.values() if reserva.fecha == seleccion_fecha]
         if not filtro_fechas:
-            print("No existe ninguna reservación para esa fecha.")
+            print("No existe ninguna reservación para esa fecha\n")
             continue
-        
-        titulo2(f"Reservaciones para el día {seleccion_fecha_procesada}")
+        titulo2(f"Reservaciones para el día {formato(seleccion_fecha)}")
         print(f"{'Folio':<8}{'Cliente':<19}{'Nombre del evento':<20}{'Sala':<20}{'Turno':<10}")
         sep(90)
-        for folio,reserva in filtro_fechas.items():
-            print(f"{folio:<8}{reserva.objeto_cliente.nombre:<19}{reserva.nombre_evento:<20}{reserva.objeto_sala.nombre:<20}{reserva.turno:<10}")
+        for reserva in filtro_fechas:
+            print(f"{reserva.folio:<8}{reserva.objeto_cliente.getNombres():<19}{reserva.nombre_evento:<20}{reserva.objeto_sala.nombre:<20}{reserva.turno:<10}")
         sep(90)
-        return
+        
+        while True:
+            exportar = entrada("¿Desea exportar el reporte? (S/N)")
+            if exportar is None:
+                return
+            if exportar not in ("SN"):
+                print("No existe esa opción, favor de elegir la correcta (S/N)\n")
+                continue
+            if exportar == "N":
+                print("Volviendo a buscar...\n")
+                break
+            while True:
+                titulo("Exportación de reporte")
+                print("1. JSON")
+                print("2. CSV")
+                print("3. EXCEL")
+                opcion = entrada("¿En qué tipo de archivo desea guardar el reporte?", tipo=int)
+                if opcion is None:
+                    return
+                if opcion == 1:
+                    exportar_json(filtro_fechas,seleccion_fecha)
+                    titulo("Reporte JSON generado exitosamente")
+                    return
+                if opcion == 2:
+                    exportar_csv(filtro_fechas,seleccion_fecha)
+                    titulo("Reporte CSV generado exitosamente")
+                    return
+                if opcion == 3:
+                    exportar_excel(filtro_fechas,seleccion_fecha)
+                    return
+                else:
+                    print("\nNo válido, elija entre 1-3.")
+                    continue
 
 
 def agregar_cliente():
-    while True:
-        nombres = input("\nIngrese los nombres de el cliente (o C para cancelar): ").title().strip()
-        if nombres == "C":
-            print("Operación cancelada, volviendo al menú...")
-            return
-        
-        apellidos = input("Proporciona los apellidos de la persona (o C para cancelar): ").title().strip()
-        if apellidos == "C":
-            print("Operación cancelada, volviendo al menú...")
-            return
-        
-        if not nombres or  not apellidos:
-            print("No puede quedar vacios nombre/apellidos")
-        else:
-            print("\n")
-            nCliente = Cliente(nombres,apellidos)
-            clientes[nCliente.id_cliente] = nCliente
-            print("#"*70)
-            print(f"Cliente agregado exitosamente con nombre: {nCliente.nombre} y Apellidos {nCliente.apellido}")
-            print(f"Clave: {nCliente.id_cliente}")
-            print("#"*70)
-            return
+    nombres = entrada("Ingrese el nombre del cliente")
+    if nombres is None:
+        return
+    apellidos = entrada("Ingrese el apellido del cliente")
+    if apellidos is None:
+        return
+    nCliente = Cliente(nombres,apellidos)
+    clientes[nCliente.id_cliente] = nCliente
+    titulo("Cliente agregado exitosamente")
+    print(f"Nombre: {nCliente.nombre} Apellido: {nCliente.apellido}")
+    print(f"Clave: {nCliente.id_cliente}")
+    sep(70)
+    salto()
+    return
         
 
 def agregar_sala():
+    nombre_sala = entrada("Ingrese el nombre de la sala")
+    if nombre_sala is None:
+        return
     while True:
-        nombre_sala = input("\nIngrese el nombre de la Sala (o C para cancelar): ").title().strip()
-        if nombre_sala == "C":
-            print("Operación cancelada, volviendo al menú...")
-            return
-        
-        if not nombre_sala:
-            print("No puede quedar vacío el nombre de la sala.")
+        cupo_sala = entrada("Ingrese el cupo de la sala (mayor que 1)", tipo=int)
+        if cupo_sala is None:
+            return 
+        if cupo_sala <2:
+            print("La sala debe ser mayor que 1")
             continue
-
-        try:
-            cupo_sala = int(input("Ingrese el cupo de la Sala (mayor a 1): "))
-        except ValueError:
-            print("No se puede quedar vacío y tiene que ser un número entero")
-            continue
-
-        if cupo_sala <=1:
-            print("El cupo de la sala debe ser mayor a 1")
-        else: 
-            print("\n")
-            nSala = Sala(nombre_sala, cupo_sala)
-            salas[nSala.id_sala] = nSala
-            print("#"*70)
-            print(f"Sala agregada exitosamente con nombre: {nSala.nombre} y un cupo de: {nSala.cupo}")
-            print(f"Clave: {nSala.id_sala}")
-            print("#"*70)
-            return
+        nSala = Sala(nombre_sala, cupo_sala)
+        salas[nSala.id_sala] = nSala
+        titulo("Sala agregada exitosamente")
+        print(f"Nombre de la Sala:  {nSala.nombre} Cupo: {nSala.cupo}")
+        print(f"Clave: {nSala.id_sala}")
+        sep(70)
+        salto()
+        return
         
+
+def salir():
+    while True:
+        fin = input("¿Desea salir del programa? (S/N): ").title().strip()
+        if fin not in ("S","N") or not fin:
+            print("No es válido, favor de usar (S/N)\n")
+            continue
+        if fin == "N":
+            print("Regresando al menú...\n")
+            return
+        if fin == "S":
+            guardar()
+            titulo("Programa terminado...")
+            sys.exit()
+
 
 def menu():
     try: 
         while True:
-            titulo("MENü PRINCIPAL")
+            titulo("MENÚ PRINCIPAL")
             print("1. Registrar la reservación de una sala.")
             print("2. Editar el nombre del evento de una reservación ya hecha.")
             print("3. Consultar las reservaciones existentes para una fecha específica. ")
@@ -372,7 +372,7 @@ def menu():
             print("5. Registrar una sala")
             print("6. Salir")
             try: 
-                respuesta = int(input("Ingresa la opcíón: "))
+                respuesta = int(input("Ingrese la opción: "))
             except ValueError:
                 print("Error: Escribir solo números del 1-6")
             else:
@@ -387,27 +387,164 @@ def menu():
                 elif respuesta == 5:
                     agregar_sala()
                 elif respuesta == 6:
-                    titulo("Programa terminado")
-                    break
+                    salir()
                 else:
                     print("Fuera de rango, elegir solo entre 1-6")
     except KeyboardInterrupt:
-        print("\nCierre forzado...")
+        titulo("Cierre forzado...")
 
-def alta_reservacion():
-    cliente = clientes[1]
-    sala = salas[4]
-    reservaciones_iniciales = [[cliente,sala,dt.date(2025,12,12),"Matutino","Evento 1"]]
-    for cliente,sala,fecha,turno,nombre in reservaciones_iniciales:
-        nuevo_evento = Reserva(cliente,sala,fecha,turno,nombre)
-        reservas[nuevo_evento.folio] = nuevo_evento
-    print("Reservación cargada: ")
-    for folio, evento in reservas.items():
-        print(f"Folio: {folio} | Cliente: {evento.objeto_cliente.nombre} | Sala: {evento.objeto_sala.nombre} | "
-          f"Fecha: {evento.fecha} | Turno: {evento.turno} | Nombre: {evento.nombre_evento}")
+
+def cargar():
+    try:
+        with open("datos.json", "r") as archivo:
+            datos = json.load(archivo) 
+    except FileNotFoundError:
+        print("\nNo hay archivo existente. Se procederá a trabajar en un archivo nuevo.")
+    else:
+        for cliente in datos["clientes"].values():
+            nCliente = Cliente(cliente["nombre"], cliente["apellido"])
+            nCliente.id_cliente = cliente["id_cliente"]
+            clientes[nCliente.id_cliente] = nCliente
+
+        for sala in datos["salas"].values():
+            nSala = Sala(sala["nombre"], sala["cupo"])
+            nSala.id_sala = sala["id_sala"]
+            salas[nSala.id_sala] = nSala
+
+        for reserva in datos["reservas"].values():
+            cliente_id = reserva["objeto_cliente"]["id_cliente"]
+            sala_id = reserva["objeto_sala"]["id_sala"]
+            objeto_cliente = clientes[cliente_id]
+            objeto_sala = salas[sala_id]
+            fecha = dt.datetime.strptime(reserva["fecha"], "%d-%m-%Y").date()
+            turno = reserva["turno"]
+            nombre_evento = reserva["nombre_evento"]
+            nReserva = Reserva(objeto_cliente, objeto_sala, fecha, turno, nombre_evento)
+            nReserva.folio = reserva["folio"]
+            reservas[nReserva.folio] = nReserva
+
+
+def guardar():
+    clientes_json = {}
+    for clave,cliente in clientes.items():
+        clientes_json[clave]={
+            "id_cliente":cliente.id_cliente,
+            "nombre":cliente.nombre,
+            "apellido":cliente.apellido}
         
+    salas_json = {}
+    for clave,sala in salas.items():
+        salas_json[clave] = {
+            "id_sala":sala.id_sala,
+            "nombre":sala.nombre,
+            "cupo":sala.cupo}
+        
+    reservas_json = {}
+    for folio, reserva in reservas.items():
+        reservas_json[folio]={
+            "folio":reserva.folio, 
+            "objeto_cliente":{
+                "id_cliente":reserva.objeto_cliente.id_cliente,
+                "nombre":reserva.objeto_cliente.nombre,
+                "apellido": reserva.objeto_cliente.apellido},
+            "objeto_sala": {
+                "id_sala": reserva.objeto_sala.id_sala,
+                "nombre": reserva.objeto_sala.nombre,
+                "cupo": reserva.objeto_sala.cupo},
+            "fecha": reserva.fecha.strftime("%d-%m-%Y"),
+            "turno": reserva.turno,
+            "nombre_evento": reserva.nombre_evento}
+    datos = {}
+    datos["clientes"] = clientes_json
+    datos["salas"] = salas_json
+    datos["reservas"] = reservas_json
+    with open("datos.json", "w") as archivo:
+        json.dump(datos, archivo, indent=4)
+
+
+def exportar_json(filtro_fechas,fecha):
+    datos = []
+    for reserva in filtro_fechas:
+        datos.append({"folio": reserva.folio,
+                      "cliente": reserva.objeto_cliente.getNombres(),
+                      "sala": reserva.objeto_sala.nombre,
+                      "cupo_sala": reserva.objeto_sala.cupo,
+                      "fecha": reserva.fecha.strftime("%d-%m-%Y"),
+                      "evento": reserva.nombre_evento,
+                      "turno": reserva.turno})
+    with open(f"Reporte-{formato(fecha)}.json", "w") as archivo:
+        json.dump(datos, archivo, indent=2)
+
+
+
+def exportar_csv(filtro_fechas,fecha):
+    with open(f"Reporte-{formato(fecha)}.csv", "w", encoding="latin1", newline="") as archivo:
+        grabador = csv.writer(archivo, delimiter="\t")
+        grabador.writerow(("Folio", "Nombre_Cliente", "Sala", "Cupo_Sala", "Fecha", "Evento", "Turno"))
+        for reserva in filtro_fechas:
+            grabador.writerow([reserva.folio,
+                               reserva.objeto_cliente.getNombres(),
+                               reserva.objeto_sala.nombre,
+                               reserva.objeto_sala.cupo,
+                               reserva.fecha.strftime("%d-%m-%Y"),
+                               reserva.nombre_evento,
+                               reserva.turno])
+        
+        
+def exportar_excel(filtro_fechas,fecha):
+    libro = openpyxl.Workbook()
+    hoja = libro["Sheet"]
+    hoja.title = "Reservaciones"
+
+    negritas = Font(bold=True)
+    centrado = Alignment(horizontal="center", vertical="center")
+    borde_grueso = Border(bottom=Side(border_style="thick", color="00078C"))
+    
+
+    celdaA1 = hoja["A1"]
+    celdaA1.value = "Reporte de Reservaciones"
+    celdaA1.font = Font(bold=True, size=16)
+    celdaA1.alignment = centrado
+
+    for columna in range(1,8):
+        celda = hoja.cell(row=1, column=columna)
+        celda.border = borde_grueso
+
+    encabezados = {1:"Folio", 2:"Cliente", 3:"Sala", 4:"Cupo", 5:"Fecha", 6:"Evento", 7:"Turno"}
+    for columna,texto in encabezados.items(): 
+        celdaA2 = hoja.cell(row=2, column=columna, value=texto) 
+        celdaA2.alignment = centrado
+        celdaA2.font = negritas
+        celdaA2.border = borde_grueso
+
+    for fila,reserva in enumerate(filtro_fechas, start=3):
+        hoja.cell(row=fila, column=1, value=reserva.folio).alignment = centrado
+        hoja.cell(row=fila, column=2, value=reserva.objeto_cliente.getNombres()).alignment = centrado
+        hoja.cell(row=fila, column=3, value=reserva.objeto_sala.nombre).alignment = centrado
+        hoja.cell(row=fila, column=4, value=reserva.objeto_sala.cupo).alignment = centrado
+        hoja.cell(row=fila, column=5, value=reserva.fecha.strftime("%d-%m-%Y")).alignment = centrado
+        hoja.cell(row=fila, column=6, value=reserva.nombre_evento).alignment = centrado
+        hoja.cell(row=fila, column=7, value=reserva.turno).alignment = centrado
+    
+    for columna in hoja.columns:
+        letra = columna[0].column_letter 
+        longitudes = []
+        for celda in columna:
+            if celda.row == 1:
+                continue
+            longitudes.append(len(str(celda.value)))
+        hoja.column_dimensions[letra].width = max(longitudes) + 2
+
+    hoja.merge_cells("A1:G1")
+
+    try:
+        libro.save(f"Reporte-{formato(fecha)}.xlsx")
+    except PermissionError:
+        print("\nEl archivo está abierto, no se puede sobrescribir.")
+    else:
+        titulo("Reporte EXCEL generado exitosamente.")
+
 
 if __name__ == "__main__":
-    altas()
-    alta_reservacion()
+    cargar()
     menu()

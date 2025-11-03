@@ -19,6 +19,7 @@ class ReservacionesDB:
     def execute_select(self, query, params=()):
         try:
             with sqlite3.connect(self.db) as conn:
+                conn.execute("PRAGMA foreign_keys = ON")
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 cursor.execute(query,params)
@@ -29,6 +30,7 @@ class ReservacionesDB:
     def execute_insert(self, query, params=()):
         try:
             with sqlite3.connect(self.db) as conn:
+                conn.execute("PRAGMA foreign_keys = ON")
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 cursor.execute(query,params)
@@ -39,6 +41,7 @@ class ReservacionesDB:
     def execute_update(self, query, params=()):
         try:
             with sqlite3.connect(self.db) as conn:
+                conn.execute("PRAGMA foreign_keys = ON")
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 cursor.execute(query,params)
@@ -48,6 +51,7 @@ class ReservacionesDB:
     def conexion(self,query):
         try:
             with sqlite3.connect(self.db) as conn:
+                conn.execute("PRAGMA foreign_keys = ON")
                 cursor = conn.cursor()
                 cursor.execute(query)
         except Error as e:
@@ -71,9 +75,11 @@ def conexion():
                     "fecha TEXT NOT NULL," \
                     "nombre_evento TEXT NOT NULL," \
                     "turno TEXT NOT NULL CHECK (turno IN ('Matutino','Vespertino','Nocturno'))," \
-                    "UNIQUE (id_sala, fecha, turno)," \
+                    "activa INTEGER NOT NULL DEFAULT 1 CHECK (activa IN (0,1))," \
                     "FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente)," \
                     "FOREIGN KEY (id_sala)    REFERENCES salas(id_sala));")
+    db.conexion("CREATE UNIQUE INDEX IF NOT EXISTS unique_reservas ON reservas (id_sala, fecha, turno) " \
+                    "WHERE activa = 1;")
 
 
 def titulo(nombre):
@@ -154,7 +160,7 @@ def listar_salas():
     return datos
 
 def turnos_ocupados(id_sala, fecha):
-    datos = db.execute_select("SELECT turno FROM reservas WHERE id_sala=? AND fecha=?",(id_sala, fecha))
+    datos = db.execute_select("SELECT turno FROM reservas WHERE id_sala=? AND fecha=? AND activa=1",(id_sala, fecha))
     turnos = [turno['turno'] for turno in datos]
     return turnos
 
@@ -185,12 +191,12 @@ def reservas_en_rango(fecha_ini, fecha_fin):
     "FROM reservas R " \
     "INNER JOIN clientes C ON C.id_cliente = R.id_cliente " \
     "INNER JOIN salas S ON S.id_sala = R.id_sala " \
-    "WHERE R.fecha BETWEEN ? AND ? " \
+    "WHERE R.fecha BETWEEN ? AND ? AND R.activa=1 " \
     "ORDER BY R.fecha, R.folio", (fecha_ini, fecha_fin))
     return datos
 
 def existe_folio(folio, fecha_inicio, fecha_fin):
-    datos = db.execute_select("SELECT folio FROM reservas WHERE folio=? AND fecha BETWEEN ? AND ?"
+    datos = db.execute_select("SELECT folio FROM reservas WHERE folio=? AND fecha BETWEEN ? AND ? AND activa=1"
                               , (folio, fecha_inicio, fecha_fin))
     return datos
 
@@ -214,16 +220,25 @@ def reservas_por_fecha(fecha):
     "R.turno " \
     "FROM reservas R INNER JOIN clientes C ON C.id_cliente = R.id_cliente " \
     "INNER JOIN salas S  ON S.id_sala = R.id_sala " \
-    "WHERE R.fecha = ? ORDER BY R.folio", (fecha,))
+    "WHERE R.fecha = ? AND R.activa=1 ORDER BY R.folio", (fecha,))
     return datos
+
+def existe_folio_cancelar(folio, inicio, fin):
+    datos = db.execute_select("SELECT R.folio, R.fecha, R.nombre_evento, S.nombre AS sala " \
+    "FROM reservas R INNER JOIN salas S ON S.id_sala = R.id_sala " \
+    "WHERE R.folio = ? AND activa=1 AND R.fecha BETWEEN ? AND ?",(folio, inicio, fin))
+    return datos
+
+def cancelar_evento(folio):
+    db.execute_update("UPDATE reservas SET activa=0 WHERE folio=?", (folio,))
 
 
 def obtener_clientes():
     titulo("Clientes registrados")
     print(f"{'Clave':<8} {'Apellidos':<20} {'Nombres':<15}")
     sep(70)
-    for r in listar_clientes():
-        print(f"{r['id_cliente']:<8} {r['apellido']:<20} {r['nombre']:<15}")
+    for cliente in listar_clientes():
+        print(f"{cliente['id_cliente']:<8} {cliente['apellido']:<20} {cliente['nombre']:<15}")
     sep(70)
 
 def obtener_salas(fecha):
@@ -493,7 +508,7 @@ def consultar_reservaciones():
             exportar = entrada("¿Desea exportar el reporte? (S/N)")
             if exportar is None:
                 return
-            if exportar not in ("SN"):
+            if exportar not in ("S","N"):
                 print("No existe esa opción, favor de elegir la correcta (S/N)\n")
                 continue
             if exportar == "N":
@@ -521,6 +536,61 @@ def consultar_reservaciones():
                 else:
                     print("\nNo válido, elija entre 1-3.")
                     continue
+
+def cancelar_reservacion():
+    if not hay_registros("reservas"):
+        print("No existen reservaciones aún para cancelar.")
+        return
+    while True:
+        fecha_inicio = entrada("Ingrese la fecha de inicio para la búsqueda (MM-DD-YYYY)", tipo=dt.date)
+        if fecha_inicio is None:
+            return
+        fecha_fin = entrada("Ingrese la fecha fin de la búsqueda (MM-DD-YYYY)", tipo=dt.date)
+        if fecha_fin is None:
+            return
+        if fecha_inicio > fecha_fin:
+            print("La fecha inicial no puede ser mayor a la fecha final.")
+            continue
+        break
+    inicio = formato_iso(fecha_inicio)
+    fin = formato_iso(fecha_fin)
+    reservas = reservas_en_rango(inicio, fin)
+    if not reservas:
+        print("\nNo hay reservaciones activas en ese rango.\n")
+        return
+    mostrar_reservacion_fechas(fecha_inicio, fecha_fin, reservas)
+    while True:
+        folio = entrada("Indique el folio a cancelar", tipo=int)
+        if folio is None:
+            return
+        existe = existe_folio_cancelar(folio, inicio, fin)
+        if not existe:
+            print("Folio no encontrado en el rango o ya cancelado.\n")
+            continue
+        reserva = existe[0]
+        fecha_evento = convertir_iso(reserva["fecha"])
+        break
+
+    if fecha_evento < FECHA_MINIMA:
+        print(f"No se puede cancelar. Debe hacerse con al menos 2 días de anticipación.")
+        return
+    
+    print(f"\nEstá por cancelar el evento '{reserva['nombre_evento']}' en la sala '{reserva['sala']}' con fecha {formato(fecha_evento)}.")
+    while True:
+        confirmacion = entrada("Confirmar cancelación (S/N)")
+        if confirmacion is None:
+            return
+        if confirmacion == "S":
+            db.execute_update("UPDATE reservas SET activa=0 WHERE folio=?", (folio,))
+            titulo("Reservación cancelada")
+            print("La disponibilidad de la sala se ha recuperado para esa fecha y turno.")
+            return 
+        elif confirmacion == "N":
+            print("Operación cancelada.\n")
+            return
+        else:
+            print("Opción no válida (S/N)\n")
+
 
 def agregar_cliente():
     nombre = entrada("Ingrese el nombre del cliente")
@@ -585,7 +655,7 @@ def inicio():
         titulo("Estado cargado correctamente")
         print(f"Clientes registrados: {clientes_count}")
         print(f"Salas registradas: {salas_count}")
-        print(f"Reservaciones existentes: {reservas_count}")
+        print(f"Reservaciones existentes (incluyendo canceladas): {reservas_count}")
         sep(70)
         
         
@@ -596,13 +666,14 @@ def menu():
             print("1. Registrar la reservación de una sala.")
             print("2. Editar el nombre del evento de una reservación ya hecha.")
             print("3. Consultar las reservaciones existentes para una fecha específica. ")
-            print("4. Registrar a un nuevo cliente")
-            print("5. Registrar una sala")
-            print("6. Salir")
+            print("4. Cancelar una reservación")
+            print("5. Registrar a un nuevo cliente")
+            print("6. Registrar una sala")
+            print("7. Salir")
             try: 
                 respuesta = int(input("Ingrese la opción: "))
             except ValueError:
-                print("Error: Escribir solo números del 1-6")
+                print("Error: Escribir solo números del 1-7")
             else:
                 if respuesta == 1:
                     agregar_reservacion()
@@ -611,16 +682,17 @@ def menu():
                 elif respuesta == 3:
                     consultar_reservaciones()
                 elif respuesta == 4:
-                    agregar_cliente()
+                    cancelar_reservacion()
                 elif respuesta == 5:
-                    agregar_sala()
+                    agregar_cliente()
                 elif respuesta == 6:
+                    agregar_sala()
+                elif respuesta == 7:
                     salir()
                 else:
-                    print("Fuera de rango, elegir solo entre 1-6")
+                    print("Fuera de rango, elegir solo entre 1-7")
     except KeyboardInterrupt:
         titulo("Cierre forzado...")
-
 
 if __name__ == "__main__":
     conexion()
